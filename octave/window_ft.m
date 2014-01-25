@@ -3,7 +3,7 @@
 ## Computes the windowed Fourier transform of the signal,
 ## with window length 2*w+1 and given window type.
 ## By default the signal is assumed non-periodic and padded with zeros,
-## setting the last argument to false will create a cyclic DFT instead.
+## setting the last argument to false will generate a cyclic DFT instead.
 ## 
 ## The valid window types are:
 ##  'gaussian', 'rect', 'hamming', 'hann', 'blackman'
@@ -17,21 +17,22 @@ function sgm = window_ft(sig, w, name = "gaussian", pad = true)
   % This is now the transform defined in the book, of the same length as the signal.
   % We always take DFT of the same interval, with the window highlighting different
   % sections of it.
+
+  % Shift the window center to the beginning of the signal. If padding is enabled,
+  % pad the window with zeros so that it does not leak to the other end.
+  % grow to signal length (as we work with the whole signal length DFTs all the time)
+  win = postpad(win, n);
   if pad == true
-    sig_work = [zeros(1,n), sig, zeros(1,n)];
-  else
-    sig_work = [sig, sig, sig];
+    win = [win, zeros(1, w)];
   endif
+  win = shift(win, -(w+1));
   
-  % Another (faster?) way to do this would be a sliding DFT, try that later.
+  % We could also generate transforms of the window length via sliding DFT, try that later.
   for t = 1:n
-    windowed = zeros(1, 3*n);
-    windowed(n+t-w:n+t+w) = win .* sig_work(n+t-w:n+t+w);
-    sgm(:, t) = fft(windowed(n+1:2*n));
+    win = shift(win, 1);
+    sgm(:, t) = fft(sig .* win(1:n));
   endfor
 endfunction
-
-
 
 
 % These are from the WTSP book
