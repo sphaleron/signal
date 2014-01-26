@@ -7,6 +7,9 @@
 ## 
 ## The valid window types are:
 ##  'gaussian', 'rect', 'hamming', 'hann', 'blackman'
+##
+## Note: there is 'stft' function in octave, which does the sliding dft thing
+## for a subset of windows, for most uses that is more appropriate.
 
 function sgm = window_ft(sig, w, name = "gaussian", pad = true)
   type = validatestring(name, {"gaussian", "rectangle", "hamming", "hanning", "blackman"});
