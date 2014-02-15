@@ -16,14 +16,21 @@
 ## is 2*pi*k*Fs (for k < N/2, the rest should be interpreted as negative frequncies,
 ## but that does not matter here).
 
+
 function output = pitchshift(signal, steps, N)
   inc = floor(N/4);
   s   = 2**(steps/12);
-#   signal = 
-  [sgm, pars] = stft(signal, N, inc, N/2, 2);
+  # Because of how the octave signal:stft/synthesis works, we have
+  # pad a bit in order to not lose part of the signal.
+  padding_left = fix((N - inc) / 2 -1);
+  # For simplicity, just add enough zeros
+  padding_right = N;
+  works = [zeros(padding_left, 1); signal(:); zeros(padding_right, 1)];
+
+  [sgm, pars] = stft(works, N, inc, N/2, 2);
   power = abs(sgm);
-  % Wrapped phase
   phase = arg(sgm);
+
   % Add a column of zeros before taking the differences.
   phase = prepad(phase, size(phase, 2) + 1, 0, 2);
   % Phase difference between successive frames
@@ -41,6 +48,6 @@ function output = pitchshift(signal, steps, N)
 
   % Inverse windowed DFT
   output = synthesis(sgm, pars);
-
+  output = reshape(output(1:length(signal)), size(signal));
 
 endfunction
