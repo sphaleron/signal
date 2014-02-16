@@ -23,7 +23,7 @@ function output = pitchshift(signal, steps, N)
   # Because of how the octave signal:stft/synthesis works, we have
   # pad a bit in order to not lose part of the signal.
   padding_left = fix((N - inc) / 2 -1);
-  # For simplicity, just add enough zeros
+  # For simplicity, just add enough zeros in the end
   padding_right = N;
   works = [zeros(padding_left, 1); signal(:); zeros(padding_right, 1)];
 
@@ -32,10 +32,9 @@ function output = pitchshift(signal, steps, N)
   phase = arg(sgm);
 
   % Add a column of zeros before taking the differences.
-  phase = prepad(phase, size(phase, 2) + 1, 0, 2);
+  phase = [zeros(size(phase, 1), 1), phase];
   % Phase difference between successive frames
-  dphase = phase - shift(phase, 1, 2);
-  dphase = dphase(:, 2:end);
+  dphase = diff(phase, 1, 2);
 
   % Subtract the "natural" phase difference due to bin center frequency (not necessary?)
   dphase -= 2*pi*inc*(0:N-1)';
