@@ -1,9 +1,9 @@
-## Usage: output = pitchshift(signal, step, N)
+## Usage: output = pitchshift(signal, step, w)
 ##
-## Phase vocoder implementation, using octave signal processing package.
+## Phase vocoder implementation.
 ## Shifts the frequency content by 'step' semitones, by taking windowed
-## Fourier transform of length 'N' (currently hamming window is used),
-## and stepping the window N/4 points between iterations.
+## Fourier transform of length '2w+1' (currently hamming window is used),
+## and stepping the window w/2 points between iterations.
 ##
 ## Note: this handles now the whole signal at once. Real-time implementation
 ## should work differently.
@@ -17,17 +17,26 @@
 ## but that does not matter here).
 
 
-function output = pitchshift(signal, steps, N)
-  inc = floor(N/4);
+function output = pitchshift(signal, steps, w)
+  N   = 2*w + 1;
+  inc = floor(w/4);
   s   = 2**(steps/12);
-  # Because of how the octave signal:stft/synthesis works, we have
-  # pad a bit in order to not lose part of the signal.
-  padding_left = fix((N - inc) / 2 -1);
-  # For simplicity, just add enough zeros in the end
-  padding_right = N;
-  works = [zeros(padding_left, 1); signal(:); zeros(padding_right, 1)];
+  % Pad on the left with zeros.
+  % For simplicity, just add enough zeros in the end
+  work_signal = [zeros(w, 1); signal(:); zeros(2*w, 1)];
 
-  [sgm, pars] = stft(works, N, inc, N/2, 2);
+  % Hamming window, normalized to one
+  window = hamming(N);
+  window = window / sumsq(window);
+
+  nframes = fix(length(signal)/inc);
+  data = zeros(N, nframes);
+  for idx = 0:(nframes - 1)
+    data(:, idx + 1) = work_signal(1 + idx*inc:1 + idx*inc + 2*w) .* window;
+  endfor
+  
+  sgm = fft(data);
+
   power = abs(sgm);
   phase = arg(sgm);
 
@@ -46,7 +55,9 @@ function output = pitchshift(signal, steps, N)
   sgm = power .* exp(i*dphase);
 
   % Inverse windowed DFT
-  output = synthesis(sgm, pars);
-  output = reshape(output(1:length(signal)), size(signal));
+  data = ifft(sgm) .* window;
+  % Sum all contributions to get back to the original frame.
+
+%  output = reshape(output(1:length(signal)), size(signal));
 
 endfunction
