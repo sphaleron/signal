@@ -18,21 +18,23 @@
 
 
 function output = pitchshift(signal, steps, w)
+  warning ("off", "Octave:broadcast");
+
   N   = 2*w + 1;
-  inc = floor(w/4);
   s   = 2**(steps/12);
+  hopa = floor(w/4);
+  hops = s*hopa;
   % Pad on the left with zeros.
   % For simplicity, just add enough zeros in the end
-  work_signal = [zeros(w, 1); signal(:); zeros(2*w, 1)];
+  work_signal = [zeros(w, 1); signal(:); zeros(N, 1)];
 
-  % Hamming window, normalized to one
+  % Hamming window. Normalization is nontrivial, as we hop frames.
   window = hamming(N);
-  window = window / sumsq(window);
 
-  nframes = fix(length(signal)/inc);
+  nframes = fix(length(signal)/hopa);
   data = zeros(N, nframes);
-  for idx = 0:(nframes - 1)
-    data(:, idx + 1) = work_signal(1 + idx*inc:1 + idx*inc + 2*w) .* window;
+  for k = 0:(nframes - 1)
+    data(:, k + 1) = work_signal(1 + k*hopa:1 + k*hopa + 2*w) .* window;
   endfor
   
   sgm = fft(data);
@@ -46,17 +48,28 @@ function output = pitchshift(signal, steps, w)
   dphase = diff(phase, 1, 2);
 
   % Subtract the "natural" phase difference due to bin center frequency (not necessary?)
-  dphase -= 2*pi*inc*(0:N-1)';
+  dphase -= 2*pi*hopa*(0:N-1)';
   % Normalize the phase and restore the natural component
   dphase = fmod(dphase + pi, 2*pi) - pi;
-  dphase += 2*pi*inc*(0:N-1)';
+  dphase += 2*pi*hopa*(0:N-1)';
   % During time ts the phase should then increase by w*ts:
-  dphase = cumsum(s * dphase, 2);
-  sgm = power .* exp(i*dphase);
+  phase = cumsum(s * dphase, 2);
+  sgm = power .* exp(i*phase);
 
   % Inverse windowed DFT
-  data = ifft(sgm) .* window;
-  % Sum all contributions to get back to the original frame.
+  data = real(ifft(sgm)) .* window;
+
+  % Synthesize the time dilated signal from separate frames.
+  work_signal = zeros(fix(s*length(signal)) + N, 1);
+  start_time = 1;
+  for k = 1:nframes
+    idx = fix(start_time);
+    work_signal(idx:idx + N - 1) += data(:, k);
+    start_time += hops;
+  endfor
+  
+  % Relevant data starts from work_signal(w+1)
+  output = work_signal;
 
 %  output = reshape(output(1:length(signal)), size(signal));
 
