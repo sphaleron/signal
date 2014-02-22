@@ -1,9 +1,9 @@
-## Usage: output = pitchshift(signal, step, w)
+## Usage: output = pitchshift(signal, step, N)
 ##
 ## Phase vocoder implementation.
 ## Shifts the frequency content by 'step' semitones, by taking windowed
-## Fourier transform of length '2w+1' (currently hamming window is used),
-## and stepping the window w/2 points between iterations.
+## Fourier transform of length 'N' (currently hamming window is used),
+## and stepping the window N/4 points between iterations.
 ##
 ## Note: this handles now the whole signal at once. Real-time implementation
 ## should work differently.
@@ -13,28 +13,27 @@
 ## we want to scale the length of the frame (and interval between frames) so
 ## that the interval becomes ts = s*ta
 ## When using window (and DFT) length N, the true angular frequency of bin 'k'
-## is 2*pi*k*Fs (for k < N/2, the rest should be interpreted as negative frequncies,
-## but that does not matter here).
+## is 2*pi*k*Fs (for k < N/2, the rest should really be interpreted as negative frequencies).
 
 
-function output = pitchshift(signal, steps, w)
+function output = pitchshift(signal, steps, N)
   warning ("off", "Octave:broadcast");
 
-  N   = 2*w + 1;
   s   = 2**(steps/12);
-  hopa = floor(w/4);
+  hopa = floor(N/4);
   hops = s*hopa;
-  % Pad on the left with zeros.
-  % For simplicity, just add enough zeros in the end
-  work_signal = [zeros(w, 1); signal(:); zeros(N, 1)];
+  % Pad with zeros on both sides
+  pad = fix(N/2);
+  work_signal = [zeros(pad, 1); signal(:); zeros(N, 1)];
 
   % Hamming window. Normalization is nontrivial, as we hop frames.
   window = hamming(N);
+  window = window / sqrt(sumsq(window(1:hopa:end)));
 
-  nframes = fix(length(signal)/hopa);
+  nframes = fix((length(work_signal) - N)/hopa);
   data = zeros(N, nframes);
   for k = 0:(nframes - 1)
-    data(:, k + 1) = work_signal(1 + k*hopa:1 + k*hopa + 2*w) .* window;
+    data(:, k + 1) = work_signal(1 + k*hopa:N + k*hopa) .* window;
   endfor
   
   sgm = fft(data);
@@ -46,12 +45,14 @@ function output = pitchshift(signal, steps, w)
   phase = [zeros(size(phase, 1), 1), phase];
   % Phase difference between successive frames
   dphase = diff(phase, 1, 2);
+  center_freq = mod((0:N-1)' + fix(N/2) , N) - fix(N/2);
+  center_freq = center_freq / N;
 
-  % Subtract the "natural" phase difference due to bin center frequency (not necessary?)
-  dphase -= 2*pi*hopa*(0:N-1)';
+  % Subtract the "natural" phase difference due to bin center frequency
+  dphase -= 2*pi*hopa*center_freq;
   % Normalize the phase and restore the natural component
   dphase = fmod(dphase + pi, 2*pi) - pi;
-  dphase += 2*pi*hopa*(0:N-1)';
+  dphase += 2*pi*hopa*center_freq;
   % During time ts the phase should then increase by w*ts:
   phase = cumsum(s * dphase, 2);
   sgm = power .* exp(i*phase);
@@ -60,7 +61,8 @@ function output = pitchshift(signal, steps, w)
   data = real(ifft(sgm)) .* window;
 
   % Synthesize the time dilated signal from separate frames.
-  work_signal = zeros(fix(s*length(signal)) + N, 1);
+  % Required length is  nframes*hops + N
+  work_signal = zeros(fix(s*length(signal)) + 2*N, 1);
   start_time = 1;
   for k = 1:nframes
     idx = fix(start_time);
